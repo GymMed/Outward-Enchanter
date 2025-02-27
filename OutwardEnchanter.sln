@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33530.505
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OutwardEnchanter", "OutwardEnchanter.csproj", "{BBA7CE87-D2AA-4646-A6B2-5614301D738A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BBA7CE87-D2AA-4646-A6B2-5614301D738A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBA7CE87-D2AA-4646-A6B2-5614301D738A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBA7CE87-D2AA-4646-A6B2-5614301D738A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBA7CE87-D2AA-4646-A6B2-5614301D738A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1532DCEB-627E-447C-B6F2-11CA3381E043}
+	EndGlobalSection
+EndGlobal
