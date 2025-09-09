@@ -295,7 +295,7 @@ namespace OutwardEnchanter.Managers
         {
             string keyName = "";
 
-            keyName = equipment.ItemID + "_" + equipment.Name;
+            keyName = equipment.ItemID + "_" + equipment.Name.Replace(" ", "_");
 
             //some modders included duplicate names
             if(EquipmentDictionary.TryGetValue(keyName, out Equipment foundEquipment))
@@ -310,13 +310,17 @@ namespace OutwardEnchanter.Managers
         {
             List<string> dropdownOptions = new List<string>();
             string keyName = "";
+            EquipmentDictionary = new Dictionary<string, Equipment>();
 
             foreach (Equipment equipment in AvailableEquipment)
             {
                 keyName = GetUniqueEquipmentsName(equipment);
 
-                if(EnchantmentsHelper.ContainsIgnoreCase( keyName, filter ))
+                if (EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                {
                     dropdownOptions.Add(keyName);
+                    EquipmentDictionary.Add(keyName, equipment);
+                }
             }
 
             FillDropdownChoices(ChooseItemDropdown, dropdownOptions);
@@ -328,6 +332,12 @@ namespace OutwardEnchanter.Managers
 
         public void FilterEnchantmentsData(string filter)
         {
+            if(ChooseItemDropdown.value < 0 || ChooseItemDropdown.value >= ChooseItemDropdown.options.Count)
+            {
+                ResultAndLogMessage($"Invalid dropdown selection: {ChooseItemDropdown.value}, options count: {ChooseItemDropdown.options.Count}");
+                return;
+            }
+
             string selectedValue = ChooseItemDropdown.options[ChooseItemDropdown.value].text;
             if (!EquipmentDictionary.TryGetValue(selectedValue, out Equipment equipment))
             {
@@ -372,8 +382,12 @@ namespace OutwardEnchanter.Managers
 
                     keyName = GetUniqueEquipmentsName(equipment);
 
-                    //dropdownOptions.Add(keyName);
+                    dropdownOptions.Add(keyName);
                     EquipmentDictionary.Add(keyName, equipment);
+
+                    #if DEBUG
+                        OutwardEnchanter.LogMessage($"GUIMainCanvasManager@FillItemsData equipment keyName added: {keyName}!");
+                    #endif
                 }
 
                 #if DEBUG
