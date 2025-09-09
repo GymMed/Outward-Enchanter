@@ -1,8 +1,10 @@
-﻿using OutwardEnchanter.Helpers;
+﻿using Mono.Cecil;
+using OutwardEnchanter.Helpers;
 using SideLoader.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,6 +27,9 @@ namespace OutwardEnchanter.Managers
 
         private Dropdown _chooseItemDropdown;
         private Dropdown _chooseEnchantmentDropdown;
+
+        private InputField _itemFilterInput;
+        private InputField _enchantmentFilterInput;
 
         private GUIMainCanvasManager()
         {
@@ -62,6 +67,9 @@ namespace OutwardEnchanter.Managers
 
         public Dictionary<string, Equipment> EquipmentDictionary { get => _equipmentDictionary; set => _equipmentDictionary = value; }
         public Dictionary<string, EnchantmentRecipe> EnchantmentRecipeDictionary { get => _enchantmentRecipeDictionary; set => _enchantmentRecipeDictionary = value; }
+
+        public InputField EnchantmentFilterInput { get => _enchantmentFilterInput; set => _enchantmentFilterInput = value; }
+        public InputField ItemFilterInput { get => _itemFilterInput; set => _itemFilterInput = value; }
 
         public void Init()
         {
@@ -135,6 +143,38 @@ namespace OutwardEnchanter.Managers
             {
                 ResultAndLogMessage("Couldn't find Enchantments Dropdown component");
             }
+
+            ItemFilterInput = this.transform.Find(mainPanelPath + "Middle-Panel/ItemFilter-Panel/ItemFilter-Input")?.GetComponent<InputField>();
+
+            if(ItemFilterInput == null)
+            {
+                ResultAndLogMessage("Couldn't find Item Filter Input component");
+            }
+            else
+            {
+                ItemFilterInput.onEndEdit.AddListener(HandleOnItemFilterEnd);
+            }
+
+            EnchantmentFilterInput = this.transform.Find(mainPanelPath + "Middle-Panel/EnchantmentFilter-Panel/EnchantmentFilter-Input")?.GetComponent<InputField>();
+
+            if(EnchantmentFilterInput == null)
+            {
+                ResultAndLogMessage("Couldn't find Enchantment Filter Input component");
+            }
+            else
+            {
+                EnchantmentFilterInput.onEndEdit.AddListener(HandleOnEnchantmentFilterEnd);
+            }
+        }
+
+        public void HandleOnItemFilterEnd(string text)
+        {
+            FilterItemsData(text);           
+        }
+
+        public void HandleOnEnchantmentFilterEnd(string text)
+        {
+            FilterEnchantmentsData(text);           
         }
 
         public void HandleOnEnchantButtonClick()
@@ -215,52 +255,114 @@ namespace OutwardEnchanter.Managers
         {
             try
             {
-                string selectedValue = ChooseItemDropdown.options[index].text;
-                if (!EquipmentDictionary.TryGetValue(selectedValue, out Equipment equipment))
-                {
-                    return;
-                }
-
-                List<EnchantmentRecipe> availableRecipes = EnchantmentsHelper.GetAvailableEnchantmentRecipies(equipment);
-                EnchantmentRecipeDictionary = new Dictionary<string, EnchantmentRecipe>();
-                List<string> availableRecipesOptions = new List<string>();
-                Enchantment enchantment = null;
-                string keyName = "";
-
-                foreach (EnchantmentRecipe recipe in availableRecipes)
-                {
-
-                    keyName = recipe.name;
-
-                    if(keyName == "")
-                    {
-                        enchantment = ResourcesPrefabManager.Instance.GetEnchantmentPrefab(recipe.RecipeID);
-
-                        if(enchantment == null)
-                        {
-                            continue;
-                        }
-
-                        keyName = enchantment.PresetID + "_" + enchantment.Name;
-                    }
-
-                    //some modders included duplicate names
-                    if(EnchantmentRecipeDictionary.TryGetValue(keyName, out EnchantmentRecipe foundEnchantment))
-                    {
-                        keyName += "_" + Guid.NewGuid();
-                    }
-
-                    EnchantmentRecipeDictionary.Add(keyName, recipe);
-                    availableRecipesOptions.Add(keyName);
-                }
-
-                if (ChooseEnchantmentDropdown != null)
-                    FillDropdownChoices(ChooseEnchantmentDropdown, availableRecipesOptions);
+                FilterEnchantmentsData(EnchantmentFilterInput.text);
             }
             catch(Exception ex) 
             {
                 OutwardEnchanter.LogMessage("GUIMainCanvasManager@HandleOnChooseItemChange error: " + ex.Message);
             }
+        }
+
+        public string GetUniqueEnchantmentsName(EnchantmentRecipe recipe)
+        {
+            Enchantment enchantment = null;
+            string keyName = "";
+
+            keyName = recipe.name;
+
+            if(keyName == "")
+            {
+                enchantment = ResourcesPrefabManager.Instance.GetEnchantmentPrefab(recipe.RecipeID);
+
+                if(enchantment == null)
+                {
+                    return null;
+                }
+
+                keyName = enchantment.PresetID + "_" + enchantment.Name;
+            }
+
+            //some modders included duplicate names
+            if(EnchantmentRecipeDictionary.TryGetValue(keyName, out EnchantmentRecipe foundEnchantment))
+            {
+                keyName += "_" + Guid.NewGuid();
+            }
+
+            return keyName;
+        }
+
+        public string GetUniqueEquipmentsName(Equipment equipment)
+        {
+            string keyName = "";
+
+            keyName = equipment.ItemID + "_" + equipment.Name.Replace(" ", "_");
+
+            //some modders included duplicate names
+            if(EquipmentDictionary.TryGetValue(keyName, out Equipment foundEquipment))
+            {
+                keyName += "_" + Guid.NewGuid();
+            }
+
+            return keyName;
+        }
+
+        public void FilterItemsData(string filter)
+        {
+            List<string> dropdownOptions = new List<string>();
+            string keyName = "";
+            EquipmentDictionary = new Dictionary<string, Equipment>();
+
+            foreach (Equipment equipment in AvailableEquipment)
+            {
+                keyName = GetUniqueEquipmentsName(equipment);
+
+                if (EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                {
+                    dropdownOptions.Add(keyName);
+                    EquipmentDictionary.Add(keyName, equipment);
+                }
+            }
+
+            FillDropdownChoices(ChooseItemDropdown, dropdownOptions);
+
+            ChooseItemDropdown.value = 0;
+            ChooseItemDropdown.RefreshShownValue();
+            ChooseItemDropdown.onValueChanged.Invoke(ChooseItemDropdown.value);
+        }
+
+        public void FilterEnchantmentsData(string filter)
+        {
+            if(ChooseItemDropdown.value < 0 || ChooseItemDropdown.value >= ChooseItemDropdown.options.Count)
+            {
+                ResultAndLogMessage($"Invalid dropdown selection: {ChooseItemDropdown.value}, options count: {ChooseItemDropdown.options.Count}");
+                return;
+            }
+
+            string selectedValue = ChooseItemDropdown.options[ChooseItemDropdown.value].text;
+            if (!EquipmentDictionary.TryGetValue(selectedValue, out Equipment equipment))
+            {
+                ResultAndLogMessage($"Item: {selectedValue} is not found! Tried to access: {ChooseItemDropdown.value}");
+                return;
+            }
+
+            List<EnchantmentRecipe> availableRecipes = EnchantmentsHelper.GetAvailableEnchantmentRecipies(equipment);
+            EnchantmentRecipeDictionary = new Dictionary<string, EnchantmentRecipe>();
+            List<string> availableRecipesOptions = new List<string>();
+            string keyName = "";
+
+            foreach (EnchantmentRecipe recipe in availableRecipes)
+            {
+                keyName = GetUniqueEnchantmentsName(recipe);
+
+                if (keyName == null || !EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                    continue;
+
+                EnchantmentRecipeDictionary.Add(keyName, recipe);
+                availableRecipesOptions.Add(keyName);
+            }
+
+            if (ChooseEnchantmentDropdown != null)
+                FillDropdownChoices(ChooseEnchantmentDropdown, availableRecipesOptions);
         }
 
         public void FillItemsData()
@@ -278,16 +380,14 @@ namespace OutwardEnchanter.Managers
                         OutwardEnchanter.LogMessage("GUIMainCanvasManager@FillItemsData equipment is null!");
                     #endif
 
-                    keyName = equipment.ItemID + "_" + equipment.Name;
-
-                    //some modders included duplicate names
-                    if(EquipmentDictionary.TryGetValue(keyName, out Equipment foundEquipment))
-                    {
-                        keyName += "_" + Guid.NewGuid();
-                    }
+                    keyName = GetUniqueEquipmentsName(equipment);
 
                     dropdownOptions.Add(keyName);
                     EquipmentDictionary.Add(keyName, equipment);
+
+                    #if DEBUG
+                        OutwardEnchanter.LogMessage($"GUIMainCanvasManager@FillItemsData equipment keyName added: {keyName}!");
+                    #endif
                 }
 
                 #if DEBUG
