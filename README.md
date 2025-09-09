@@ -7,10 +7,10 @@
 </div>
 
 <div align="center">
-	<a href="https://thunderstore.io/c/outward/p/GymMed/Enchantments_Viewer/">
+	<a href="https://thunderstore.io/c/outward/p/GymMed/Enchanter/">
 		<img src="https://img.shields.io/thunderstore/dt/GymMed/Enchanter" alt="Thunderstore Downloads">
 	</a>
-	<a href="https://github.com/GymMed/Outward-Enchantments-Viewer/releases/latest">
+	<a href="https://github.com/GymMed/Outward-Enchanter/releases/latest">
 		<img src="https://img.shields.io/thunderstore/v/GymMed/Enchanter" alt="Thunderstore Version">
 	</a>
 </div>
