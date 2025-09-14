@@ -219,6 +219,32 @@ namespace OutwardEnchanter.Managers
                 return;
             }
 
+            if(selectedEnchantmentValue == "None")
+            {
+                try
+                {
+                    Item item = SpawnEquipment(equipment);
+                    item.Start();
+
+                    if (item is Equipment newEquipment)
+                    {
+    #if DEBUG
+                        OutwardEnchanter.LogMessage("spawned item!");
+    #endif
+                        item.ApplyVisualModifications();
+#if DEBUG
+                        OutwardEnchanter.LogMessage("applied visuals!");
+#endif
+                        this.ResultMessage($"Successfully spawned! \nequipment: {ChooseItemDropdown.options[ChooseItemDropdown.value].text}");
+                    }
+                }
+                catch(Exception ex) 
+                {
+                    this.ResultAndLogMessage("Spawning error: " + ex.Message);
+                }
+
+            }
+
             if(!enchantmentRecipe.GetHasMatchingEquipment(equipment))
             {
                 this.ResultAndLogMessage("Provided incompatible enchantment recipe with equipment!");
@@ -349,6 +375,10 @@ namespace OutwardEnchanter.Managers
             EnchantmentRecipeDictionary = new Dictionary<string, EnchantmentRecipe>();
             List<string> availableRecipesOptions = new List<string>();
             string keyName = "";
+
+            //Default spawn item option
+            EnchantmentRecipeDictionary.Add("None", new EnchantmentRecipe());
+            availableRecipesOptions.Add("None");
 
             foreach (EnchantmentRecipe recipe in availableRecipes)
             {
