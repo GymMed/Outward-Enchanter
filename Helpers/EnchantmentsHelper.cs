@@ -212,5 +212,42 @@ namespace OutwardEnchanter.Helpers
                 }
             }
         }
+
+        public static string GetUniqueEnchantmentsName(EnchantmentRecipe recipe, Dictionary<string, EnchantmentRecipe>EnchantmentRecipeDictionary)
+        {
+            Enchantment enchantment = null;
+            string keyName = "";
+
+            keyName = recipe.name;
+
+            if(keyName == "")
+            {
+                enchantment = ResourcesPrefabManager.Instance.GetEnchantmentPrefab(recipe.RecipeID);
+
+                if(enchantment == null)
+                {
+                    return null;
+                }
+
+                keyName = enchantment.PresetID + "_" + enchantment.Name;
+            }
+
+            //some modders included duplicate names
+            if(EnchantmentRecipeDictionary.TryGetValue(keyName, out EnchantmentRecipe foundEnchantment))
+            {
+                keyName += "_" + Guid.NewGuid();
+            }
+
+            return keyName;
+        }
+
+
+        public static void SetItemAsGenerated(Item item)
+        {
+            item.IsGenerated = true;
+            item.ClientGenerated = true;
+            string addedSepartion = string.IsNullOrWhiteSpace(item.Description) ? "" : item.Description + "\n\n";
+            item.m_localizedDescription = addedSepartion + "Item is generated using GymMed Enchanter mod!";
+        }
     }
 }

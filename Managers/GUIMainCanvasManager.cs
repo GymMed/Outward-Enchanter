@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -30,6 +31,8 @@ namespace OutwardEnchanter.Managers
 
         private InputField _itemFilterInput;
         private InputField _enchantmentFilterInput;
+
+        private int availableEquipmentCount;
 
         private GUIMainCanvasManager()
         {
@@ -70,6 +73,8 @@ namespace OutwardEnchanter.Managers
 
         public InputField EnchantmentFilterInput { get => _enchantmentFilterInput; set => _enchantmentFilterInput = value; }
         public InputField ItemFilterInput { get => _itemFilterInput; set => _itemFilterInput = value; }
+
+        public int AvailableEquipmentCount { get => availableEquipmentCount; set => availableEquipmentCount = value; }
 
         public void Init()
         {
@@ -174,7 +179,8 @@ namespace OutwardEnchanter.Managers
 
         public void HandleOnEnchantmentFilterEnd(string text)
         {
-            FilterEnchantmentsData(text);           
+            FilterItemsData(ItemFilterInput.text);
+            FilterEnchantmentsDataBasedOnItem(text);           
         }
 
         public void HandleOnEnchantButtonClick()
@@ -193,7 +199,7 @@ namespace OutwardEnchanter.Managers
             
             if(ChooseItemDropdown.options == null || ChooseItemDropdown.options.Count < 1)
             {
-                this.ResultAndLogMessage($"Couldn't generate equipment options in dropdown! Available equipment count: {AvailableEquipment.Count}");
+                this.ResultAndLogMessage($"Couldn't generate equipment options in dropdown! Available equipment count: {AvailableEquipmentCount}");
                 return;
             }
 
@@ -235,6 +241,7 @@ namespace OutwardEnchanter.Managers
 #if DEBUG
                         OutwardEnchanter.LogMessage("applied visuals!");
 #endif
+                        EnchantmentsHelper.SetItemAsGenerated(item);
                         this.ResultMessage($"Successfully spawned! \nequipment: {ChooseItemDropdown.options[ChooseItemDropdown.value].text}");
                     }
                 }
@@ -267,6 +274,8 @@ namespace OutwardEnchanter.Managers
 #if DEBUG
                     OutwardEnchanter.LogMessage("applied visuals!");
 #endif
+
+                    EnchantmentsHelper.SetItemAsGenerated(item);
                     this.ResultMessage($"Successfully enchanted! \nequipment: {ChooseItemDropdown.options[ChooseItemDropdown.value].text} \n" + 
                         $"enchantment: {ChooseEnchantmentDropdown.options[ChooseEnchantmentDropdown.value].text}");
                 }
@@ -281,7 +290,7 @@ namespace OutwardEnchanter.Managers
         {
             try
             {
-                FilterEnchantmentsData(EnchantmentFilterInput.text);
+                FilterEnchantmentsDataBasedOnItem(EnchantmentFilterInput.text);
             }
             catch(Exception ex) 
             {
@@ -289,74 +298,87 @@ namespace OutwardEnchanter.Managers
             }
         }
 
-        public string GetUniqueEnchantmentsName(EnchantmentRecipe recipe)
-        {
-            Enchantment enchantment = null;
-            string keyName = "";
-
-            keyName = recipe.name;
-
-            if(keyName == "")
-            {
-                enchantment = ResourcesPrefabManager.Instance.GetEnchantmentPrefab(recipe.RecipeID);
-
-                if(enchantment == null)
-                {
-                    return null;
-                }
-
-                keyName = enchantment.PresetID + "_" + enchantment.Name;
-            }
-
-            //some modders included duplicate names
-            if(EnchantmentRecipeDictionary.TryGetValue(keyName, out EnchantmentRecipe foundEnchantment))
-            {
-                keyName += "_" + Guid.NewGuid();
-            }
-
-            return keyName;
-        }
-
-        public string GetUniqueEquipmentsName(Equipment equipment)
-        {
-            string keyName = "";
-
-            keyName = equipment.ItemID + "_" + equipment.Name.Replace(" ", "_");
-
-            //some modders included duplicate names
-            if(EquipmentDictionary.TryGetValue(keyName, out Equipment foundEquipment))
-            {
-                keyName += "_" + Guid.NewGuid();
-            }
-
-            return keyName;
-        }
-
         public void FilterItemsData(string filter)
         {
-            List<string> dropdownOptions = new List<string>();
-            string keyName = "";
-            EquipmentDictionary = new Dictionary<string, Equipment>();
+            string previousValue = "";
+            int selectionValue = 0;
 
-            foreach (Equipment equipment in AvailableEquipment)
-            {
-                keyName = GetUniqueEquipmentsName(equipment);
+            if (ChooseItemDropdown.options.Count > 0)
+                previousValue = ChooseItemDropdown.options[ChooseItemDropdown.value].text;
 
-                if (EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+            this.ResultMessage("Loading Items . . .");
+
+            ChooseEnchantmentDropdown.interactable = false;
+            ChooseItemDropdown.interactable = false;
+
+            Task.Run(() =>
                 {
-                    dropdownOptions.Add(keyName);
-                    EquipmentDictionary.Add(keyName, equipment);
-                }
-            }
+                    List<string> dropdownOptions = new List<string>();
+                    string keyName = "";
+                    Dictionary<string, Equipment> localEquipmentDictionary = new Dictionary<string, Equipment>();
+                    List<Equipment> filteredEquipment = AvailableEquipment;
 
-            FillDropdownChoices(ChooseItemDropdown, dropdownOptions);
+                    if(EnchantmentFilterInput.text != "")
+                    {
+                        filteredEquipment = ItemsHelper.GetEquipmentsByEnchantmentName(EnchantmentFilterInput.text, AvailableEquipment, EnchantmentRecipeDictionary);
+                    }
 
-            ChooseItemDropdown.value = 0;
-            ChooseItemDropdown.RefreshShownValue();
-            ChooseItemDropdown.onValueChanged.Invoke(ChooseItemDropdown.value);
+                    int availableCount = filteredEquipment.Count;
+
+                    if (string.IsNullOrEmpty(previousValue))
+                    {
+                        foreach (Equipment equipment in filteredEquipment)
+                        {
+                            keyName = ItemsHelper.GetUniqueEquipmentsName(equipment, localEquipmentDictionary);
+
+                            if (EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                            {
+                                dropdownOptions.Add(keyName);
+                                localEquipmentDictionary.Add(keyName, equipment);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (Equipment equipment in filteredEquipment)
+                        {
+                            keyName = ItemsHelper.GetUniqueEquipmentsName(equipment, localEquipmentDictionary);
+
+                            if (EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                            {
+                                if(string.Equals(keyName, previousValue, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    selectionValue = dropdownOptions.Count;
+                                }
+                                dropdownOptions.Add(keyName);
+                                localEquipmentDictionary.Add(keyName, equipment);
+                            }
+                        }
+                    }
+                return (dropdownOptions, localEquipmentDictionary, selectionValue, availableCount);
+            })
+            .ContinueWith(t =>
+            {
+                // Main thread: update UI safely
+                var (dropdownOptions, localEquipmentDict, selectionValue, availableCount) = t.Result;
+
+                EquipmentDictionary = localEquipmentDict;
+                AvailableEquipmentCount = availableCount;
+
+                FillDropdownChoices(ChooseItemDropdown, dropdownOptions);
+
+                ChooseItemDropdown.value = selectionValue;
+                ChooseItemDropdown.RefreshShownValue();
+                ChooseItemDropdown.onValueChanged.Invoke(ChooseItemDropdown.value);
+
+                this.ResultMessage("Finished Loading Equipment!");
+
+                ChooseEnchantmentDropdown.interactable = true;
+                ChooseItemDropdown.interactable = true;
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
-        public void FilterEnchantmentsData(string filter)
+        public void FilterEnchantmentsDataBasedOnItem(string filter)
         {
             if(ChooseItemDropdown.value < 0 || ChooseItemDropdown.value >= ChooseItemDropdown.options.Count)
             {
@@ -371,64 +393,140 @@ namespace OutwardEnchanter.Managers
                 return;
             }
 
-            List<EnchantmentRecipe> availableRecipes = EnchantmentsHelper.GetAvailableEnchantmentRecipies(equipment);
-            EnchantmentRecipeDictionary = new Dictionary<string, EnchantmentRecipe>();
-            List<string> availableRecipesOptions = new List<string>();
-            string keyName = "";
+            string previousValue = "";
+            int selectionValue = 0;
 
-            //Default spawn item option
-            EnchantmentRecipeDictionary.Add("None", new EnchantmentRecipe());
-            availableRecipesOptions.Add("None");
+            if (ChooseEnchantmentDropdown.options.Count > 0)
+                previousValue = ChooseEnchantmentDropdown.options[ChooseEnchantmentDropdown.value].text;
 
-            foreach (EnchantmentRecipe recipe in availableRecipes)
-            {
-                keyName = GetUniqueEnchantmentsName(recipe);
+            this.ResultMessage("Loading Enchantments and Items . . .");
 
-                if (keyName == null || !EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
-                    continue;
+            ChooseEnchantmentDropdown.interactable = false;
+            ChooseItemDropdown.interactable = false;
 
-                EnchantmentRecipeDictionary.Add(keyName, recipe);
-                availableRecipesOptions.Add(keyName);
-            }
+            Task.Run(() =>
+                {
+                    List<EnchantmentRecipe> availableRecipes = EnchantmentsHelper.GetAvailableEnchantmentRecipies(equipment);
+                    Dictionary<string, EnchantmentRecipe> localRecipeDictionary = new Dictionary<string, EnchantmentRecipe>();
+                    List<string> availableRecipesOptions = new List<string>();
+                    string keyName = "";
 
-            if (ChooseEnchantmentDropdown != null)
-                FillDropdownChoices(ChooseEnchantmentDropdown, availableRecipesOptions);
+                    //Default spawn item option
+                    localRecipeDictionary.Add("None", new EnchantmentRecipe());
+                    availableRecipesOptions.Add("None");
+
+                    if (string.IsNullOrEmpty(previousValue))
+                    {
+                        foreach (EnchantmentRecipe recipe in availableRecipes)
+                        {
+                            keyName = EnchantmentsHelper.GetUniqueEnchantmentsName(recipe, localRecipeDictionary);
+
+                            if (keyName == null || !EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                                continue;
+
+                            localRecipeDictionary.Add(keyName, recipe);
+                            availableRecipesOptions.Add(keyName);
+                        }
+                    }
+                    else
+                    {
+                        foreach (EnchantmentRecipe recipe in availableRecipes)
+                        {
+                            keyName = EnchantmentsHelper.GetUniqueEnchantmentsName(recipe, localRecipeDictionary);
+
+                            if (keyName == null || !EnchantmentsHelper.ContainsIgnoreCase(keyName, filter))
+                                continue;
+
+                            if(string.Equals(keyName, previousValue, StringComparison.OrdinalIgnoreCase))
+                            {
+                                selectionValue = availableRecipesOptions.Count;
+                            }
+
+                            localRecipeDictionary.Add(keyName, recipe);
+                            availableRecipesOptions.Add(keyName);
+                        }
+                    }
+
+                    return (availableRecipesOptions, localRecipeDictionary, selectionValue);
+                })
+                .ContinueWith(t =>
+                {
+                    var (availableRecipesOptions, localRecipeDictionary, selectionValue) = t.Result;
+
+                    if (ChooseEnchantmentDropdown != null)
+                    {
+                        EnchantmentRecipeDictionary = localRecipeDictionary;
+                        FillDropdownChoices(ChooseEnchantmentDropdown, availableRecipesOptions);
+
+                        ChooseEnchantmentDropdown.value = selectionValue;
+                        ChooseEnchantmentDropdown.RefreshShownValue();
+                        ChooseEnchantmentDropdown.onValueChanged.Invoke(ChooseEnchantmentDropdown.value);
+
+                        this.ResultMessage("Finished Loading Enchantments and Equipment!");
+
+                        ChooseEnchantmentDropdown.interactable = true;
+                        ChooseItemDropdown.interactable = true;
+                    }
+
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         public void FillItemsData()
         {
             try
             {
-                List<string> dropdownOptions = new List<string>();
-                EquipmentDictionary = new Dictionary<string, Equipment>();
-                string keyName = "";
+                this.ResultMessage("Loading Enchantments . . .");
 
-                foreach (Equipment equipment in AvailableEquipment)
+                ChooseEnchantmentDropdown.interactable = false;
+                ChooseItemDropdown.interactable = false;
+
+                Task.Run(() =>
+                    {
+                    List<string> dropdownOptions = new List<string>();
+                    Dictionary<string, Equipment> localEquipmentDictionary = new Dictionary<string, Equipment>();
+                    string keyName = "";
+
+                    foreach (Equipment equipment in AvailableEquipment)
+                    {
+                        #if DEBUG
+                        if(equipment == null)
+                            OutwardEnchanter.LogMessage("GUIMainCanvasManager@FillItemsData equipment is null!");
+                        #endif
+
+                        keyName = ItemsHelper.GetUniqueEquipmentsName(equipment, localEquipmentDictionary);
+
+                        dropdownOptions.Add(keyName);
+                        localEquipmentDictionary.Add(keyName, equipment);
+
+                        #if DEBUG
+                            OutwardEnchanter.LogMessage($"GUIMainCanvasManager@FillItemsData equipment keyName added: {keyName}!");
+                        #endif
+                    }
+
+                    return (dropdownOptions, localEquipmentDictionary);
+                })
+                .ContinueWith(t =>
                 {
-                    #if DEBUG
-                    if(equipment == null)
-                        OutwardEnchanter.LogMessage("GUIMainCanvasManager@FillItemsData equipment is null!");
-                    #endif
-
-                    keyName = GetUniqueEquipmentsName(equipment);
-
-                    dropdownOptions.Add(keyName);
-                    EquipmentDictionary.Add(keyName, equipment);
+                    var (dropdownOptions, localEquipmentDictionary) = t.Result;
 
                     #if DEBUG
-                        OutwardEnchanter.LogMessage($"GUIMainCanvasManager@FillItemsData equipment keyName added: {keyName}!");
+                    OutwardEnchanter.LogMessage($"GUIMainCanvasManager@FillItemsData AvailableEquipment: {AvailableEquipment.Count} " +
+                        $"options: {dropdownOptions.Count} !");
                     #endif
-                }
 
-                #if DEBUG
-                OutwardEnchanter.LogMessage($"GUIMainCanvasManager@FillItemsData AvailableEquipment: {AvailableEquipment.Count} " +
-                    $"options: {dropdownOptions.Count} !");
-                #endif
-                FillDropdownChoices(ChooseItemDropdown, dropdownOptions);
+                    EquipmentDictionary = localEquipmentDictionary;
+                    AvailableEquipmentCount = localEquipmentDictionary.Count;
+                    FillDropdownChoices(ChooseItemDropdown, dropdownOptions);
 
-                ChooseItemDropdown.value = 0;
-                ChooseItemDropdown.RefreshShownValue();
-                ChooseItemDropdown.onValueChanged.Invoke(ChooseItemDropdown.value);
+                    ChooseItemDropdown.value = 0;
+                    ChooseItemDropdown.RefreshShownValue();
+                    ChooseItemDropdown.onValueChanged.Invoke(ChooseItemDropdown.value);
+
+                    this.ResultMessage("Finished Loading Enchantments!");
+
+                    ChooseEnchantmentDropdown.interactable = true;
+                    ChooseItemDropdown.interactable = true;
+                }, TaskScheduler.FromCurrentSynchronizationContext());
             }
             catch (Exception ex) 
             {
